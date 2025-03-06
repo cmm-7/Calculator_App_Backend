@@ -7,16 +7,20 @@ const serviceAccount = {
   client_email: process.env.FIREBASE_CLIENT_EMAIL,
 };
 
-// Initialize Firebase Admin SDK
-admin.initializeApp({
-  credential: admin.credential.cert(serviceAccount),
-});
+// ✅ Initialize Firebase Admin SDK (Ensures it doesn't reinitialize)
+if (!admin.apps.length) {
+  admin.initializeApp({
+    credential: admin.credential.cert(serviceAccount),
+  });
+}
 
-// Middleware to verify Firebase ID Token
+// ✅ Middleware to verify Firebase ID Token
 const authenticate = async (req, res, next) => {
   const token = req.headers.authorization;
 
-  if (!token) return res.status(401).json({ message: "No token provided" });
+  if (!token) {
+    return res.status(401).json({ error: "No token provided" });
+  }
 
   try {
     const decodedToken = await admin.auth().verifyIdToken(token);
@@ -24,8 +28,16 @@ const authenticate = async (req, res, next) => {
     next(); // Proceed to the next middleware
   } catch (error) {
     console.error("Error verifying Firebase token:", error);
-    res.status(401).json({ message: "Unauthorized" });
+
+    if (error.code === "auth/id-token-expired") {
+      return res
+        .status(401)
+        .json({ error: "Token expired. Please log in again." });
+    }
+
+    res.status(401).json({ error: "Unauthorized" });
   }
 };
 
-module.exports = authenticate;
+// ✅ Export both `admin` and `authenticate`
+module.exports = { admin, authenticate };

@@ -1,7 +1,7 @@
 //DEPENDENCIES
 const cors = require("cors");
 const express = require("express");
-const account = require("./controller/authController");
+const auth = require("./controller/authController");
 const calculations = require("./controller/calculationsController");
 
 //CONFIGURATIONS
@@ -16,7 +16,7 @@ app.get("/", (req, res) => {
   res.send("Hello World!");
 });
 
-app.use("/account", account);
+app.use("/auth", auth);
 
 app.use("/calculations", calculations);
 

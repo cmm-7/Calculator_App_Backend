@@ -57,7 +57,7 @@ auth.post("/signup", async (req, res) => {
 // Login Route (Requires Authentication)
 auth.post("/login", authenticate, async (req, res) => {
   try {
-    console.log("🔥 Received login request..."); // ✅ Log when login is triggered
+    console.log("🔥 Received login request..."); // Log when login is triggered
 
     if (!req.user) {
       console.log("❌ Unauthorized: No user found in request.");

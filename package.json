@@ -3,7 +3,11 @@
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "test": "jest --runInBand",
+    "test:auth": "jest tests/auth.test.js --runInBand",
+    "test:firebase-auth": "jest tests/authFirebase.test.js --runInBand",
+    "test:calculations": "jest tests/calculations.test.js --runInBand",
+    "test:all-routes": "jest tests/allRoutes.test.js --runInBand",
     "start": "nodemon server.js"
   },
   "author": "",
@@ -17,5 +21,14 @@
     "firebase-admin": "^13.1.0",
     "nodemon": "^3.1.9",
     "pg-promise": "^11.10.2"
+  },
+  "devDependencies": {
+    "jest": "^29.7.0",
+    "supertest": "^7.0.0"
+  },
+  "jest": {
+    "testTimeout": 30000,
+    "maxWorkers": 1,
+    "forceExit": true
   }
 }

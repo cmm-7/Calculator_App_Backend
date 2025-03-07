@@ -9,22 +9,28 @@ const firebaseConfig = {
   projectId: process.env.FIREBASE_PROJECT_ID,
 };
 
-console.log("🔍 Firebase Config:", firebaseConfig);
-
+// Initialize Firebase App
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 
-// Sign in and get ID token
-const email = process.env.FIREBASE_TEST_EMAIL;
-const password = process.env.FIREBASE_TEST_PASSWORD;
+// Function to get Firebase token
+const getFirebaseToken = async () => {
+  try {
+    console.log("🔍 Signing in to Firebase...");
 
-console.log("🔍 Signing in with email:", email);
+    const userCredential = await signInWithEmailAndPassword(
+      auth,
+      process.env.FIREBASE_TEST_EMAIL,
+      process.env.FIREBASE_TEST_PASSWORD
+    );
 
-signInWithEmailAndPassword(auth, email, password)
-  .then(async (userCredential) => {
     const idToken = await userCredential.user.getIdToken();
-    console.log("✅ Firebase ID Token:", idToken);
-  })
-  .catch((error) => {
+    console.log("✅ Firebase ID Token Retrieved");
+    return idToken;
+  } catch (error) {
     console.error("❌ Error signing in:", error.message);
-  });
+    throw new Error("Failed to retrieve Firebase token");
+  }
+};
+
+module.exports = { getFirebaseToken };

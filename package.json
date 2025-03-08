@@ -8,7 +8,8 @@
     "test:firebase-auth": "jest tests/authFirebase.test.js --runInBand",
     "test:calculations": "jest tests/calculations.test.js --runInBand",
     "test:all-routes": "jest tests/allRoutes.test.js --runInBand",
-    "start": "nodemon server.js"
+    "start": "node server.js",
+    "dev": "nodemon server.js"
   },
   "author": "",
   "license": "ISC",

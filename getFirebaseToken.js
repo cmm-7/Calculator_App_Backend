@@ -33,4 +33,16 @@ const getFirebaseToken = async () => {
   }
 };
 
+// ✅ Export function for Jest testing
 module.exports = { getFirebaseToken };
+
+// ✅ Only run this script when executed directly
+if (require.main === module) {
+  getFirebaseToken()
+    .then((token) => {
+      console.log("📝 Your Firebase Token:", token);
+    })
+    .catch((error) => {
+      console.error("❌ Error retrieving token:", error.message);
+    });
+}

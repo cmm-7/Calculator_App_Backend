@@ -7,6 +7,8 @@ const path = require("path");
 const schemaPath = path.join(__dirname, "schema.sql");
 const schemaSQL = fs.readFileSync(schemaPath, "utf8");
 
+const isRenderDB = !!process.env.DATABASE_URL;
+
 // Extract environment variables
 const { DATABASE_URL, PG_HOST, PG_PORT, PG_DATABASE, PG_USER, PG_PASSWORD } =
   process.env;

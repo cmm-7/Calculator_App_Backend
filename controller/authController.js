@@ -10,12 +10,17 @@ const {
 const auth = express.Router();
 
 // Signup Route (Verifies Firebase Token)
+// Signup Route (Verifies Firebase Token)
 auth.post("/signup", async (req, res) => {
   try {
     console.log("🔥 Received signup request...");
 
     // Extract Firebase token from Headers
-    const token = req.headers.authorization;
+    const authHeader = req.headers.authorization;
+    const token =
+      authHeader && authHeader.startsWith("Bearer ")
+        ? authHeader.split(" ")[1]
+        : null;
 
     if (!token) {
       console.log("❌ Missing Firebase ID token in Headers");
@@ -24,7 +29,7 @@ auth.post("/signup", async (req, res) => {
         .json({ error: "Missing Firebase ID token in Headers" });
     }
 
-    // Verify the Firebase token
+    // Verify Firebase token
     const decodedToken = await admin.auth().verifyIdToken(token);
     const { uid, email } = decodedToken;
 
@@ -35,19 +40,23 @@ auth.post("/signup", async (req, res) => {
       return res.status(400).json({ error: "Invalid token data" });
     }
 
-    // Check if user already exists
+    // 🛠 **Ensure User is Stored in PostgreSQL**
     const existingUser = await getUserById(uid);
     if (existingUser) {
       console.log("⚠️ User already exists in DB");
       return res.status(400).json({ error: "User already exists." });
     }
 
-    // Store new user in PostgreSQL
     console.log("✅ Storing user in database...");
     await createUser(uid, email);
 
     console.log("🎉 User successfully signed up!");
-    res.status(201).json({ message: "User signed up successfully" });
+
+    // ✅ Return a valid user object
+    res.status(201).json({
+      message: "User signed up successfully",
+      user: { uid, email }, // 👈 Ensure this is sent to frontend
+    });
   } catch (error) {
     console.error("❌ Error signing up user:", error);
     res.status(500).json({ error: "Internal server error" });

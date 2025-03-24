@@ -1,11 +1,15 @@
 const express = require("express");
 const { admin, authenticate } = require("../middleware/firebase");
+const db = require("../db/dbConfig");
 const {
   createUser,
   getUserById,
   enableTwoFactorAuth,
   disableTwoFactorAuth,
+  storeVerificationCode,
+  verifyCode,
 } = require("../queries/authQueries");
+const { sendVerificationCode } = require("../services/emailService");
 
 const auth = express.Router();
 
@@ -66,7 +70,7 @@ auth.post("/signup", async (req, res) => {
 // Login Route (Requires Authentication)
 auth.post("/login", authenticate, async (req, res) => {
   try {
-    console.log("🔥 Received login request..."); // Log when login is triggered
+    console.log("🔥 Received login request...");
 
     if (!req.user) {
       console.log("❌ Unauthorized: No user found in request.");
@@ -75,6 +79,14 @@ auth.post("/login", authenticate, async (req, res) => {
 
     const { uid, email } = req.user;
     console.log(`🔹 Firebase Verified: UID=${uid}, Email=${email}`);
+
+    // Get the token from the Authorization header
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      console.log("❌ No valid authorization header found");
+      return res.status(401).json({ error: "No valid authorization token" });
+    }
+    const token = authHeader.split(" ")[1];
 
     // Check if user exists in PostgreSQL
     const existingUser = await getUserById(uid);
@@ -85,11 +97,56 @@ auth.post("/login", authenticate, async (req, res) => {
         .json({ error: "User not found. Please sign up first." });
     }
 
+    // Check if 2FA is enabled
+    if (existingUser.two_factor_enabled) {
+      console.log(
+        "🔒 2FA is enabled for user, preparing to send verification code..."
+      );
+
+      try {
+        // Generate and store verification code
+        const code = Math.floor(100000 + Math.random() * 900000).toString();
+        console.log("📝 Generated verification code");
+
+        await storeVerificationCode(uid, code);
+        console.log("💾 Stored verification code in database");
+
+        // Send verification code
+        await sendVerificationCode(email, code);
+        console.log("✉️ Verification code sent successfully!");
+
+        return res.status(200).json({
+          requires2FA: true,
+          tempToken: token,
+          message: "2FA code sent to email",
+        });
+      } catch (twoFactorError) {
+        console.error("❌ 2FA Error Details:", twoFactorError);
+
+        // Cleanup stored code if email sending fails
+        try {
+          await db.none("DELETE FROM verification_codes WHERE user_id = $1", [
+            uid,
+          ]);
+          console.log("🧹 Cleaned up stored verification code after error");
+        } catch (cleanupError) {
+          console.error("❌ Cleanup error:", cleanupError);
+        }
+
+        return res.status(500).json({
+          error: "Failed to send verification code",
+          details: twoFactorError.message,
+        });
+      }
+    }
+
     console.log("✅ User found in database! Logging in...");
     res.status(200).json({ message: "User authenticated", user: existingUser });
   } catch (error) {
     console.error("❌ Error during authentication:", error);
-    res.status(500).json({ error: "Internal server error" });
+    res
+      .status(500)
+      .json({ error: "Internal server error", details: error.message });
   }
 });
 
@@ -140,6 +197,90 @@ auth.post("/disable-2fa", authenticate, async (req, res) => {
   } catch (error) {
     console.error("❌ Error disabling 2FA:", error);
     res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// Send 2FA verification code
+auth.post("/send-verification-code", authenticate, async (req, res) => {
+  try {
+    console.log("🔥 Received request to send verification code...");
+
+    const { uid, email } = req.user;
+    console.log(`🔹 Sending verification code to: ${email}`);
+
+    // Generate a 6-digit code
+    const code = Math.floor(100000 + Math.random() * 900000).toString();
+
+    try {
+      // Store the code in the database with expiration
+      await storeVerificationCode(uid, code);
+    } catch (dbError) {
+      console.error("❌ Database error:", dbError);
+      return res
+        .status(500)
+        .json({ error: "Failed to store verification code" });
+    }
+
+    try {
+      // Send the code via email
+      await sendVerificationCode(email, code);
+    } catch (emailError) {
+      console.error("❌ Email error details:", emailError);
+      // Delete the stored code if email sending fails
+      try {
+        await db.none("DELETE FROM verification_codes WHERE user_id = $1", [
+          uid,
+        ]);
+      } catch (cleanupError) {
+        console.error("❌ Cleanup error:", cleanupError);
+      }
+      return res
+        .status(500)
+        .json({ error: `Email error: ${emailError.message}` });
+    }
+
+    console.log("✅ Verification code sent successfully!");
+    res.status(200).json({ message: "Verification code sent successfully" });
+  } catch (error) {
+    console.error("❌ General error:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Verify 2FA code and enable 2FA
+auth.post("/verify-2fa-code", authenticate, async (req, res) => {
+  try {
+    console.log("🔥 Received request to verify 2FA code...");
+
+    const { uid } = req.user;
+    const { code } = req.body;
+
+    if (!code) {
+      return res.status(400).json({ error: "Verification code is required" });
+    }
+
+    // Verify the code
+    const isValid = await verifyCode(uid, code);
+    if (!isValid) {
+      return res
+        .status(400)
+        .json({ error: "Invalid or expired verification code" });
+    }
+
+    // Get user data
+    const user = await getUserById(uid);
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    console.log("✅ Two-Factor Authentication verified successfully!");
+    res.status(200).json({
+      message: "Two-Factor Authentication verified",
+      user: user,
+    });
+  } catch (error) {
+    console.error("❌ Error verifying code:", error);
+    res.status(500).json({ error: "Failed to verify code" });
   }
 });
 

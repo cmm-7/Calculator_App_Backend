@@ -52,9 +52,43 @@ const disableTwoFactorAuth = async (uid) => {
   }
 };
 
+const storeVerificationCode = async (uid, code) => {
+  try {
+    // Delete any existing codes for this user
+    await db.none("DELETE FROM verification_codes WHERE user_id = $1", [uid]);
+
+    // Store new code with 10-minute expiration
+    await db.none(
+      "INSERT INTO verification_codes (user_id, code, expires_at) VALUES ($1, $2, NOW() + INTERVAL '10 minutes')",
+      [uid, code]
+    );
+    console.log(`✅ Verification code stored for user: ${uid}`);
+  } catch (error) {
+    console.error("❌ Database error storing verification code:", error);
+    throw new Error("Error storing verification code");
+  }
+};
+
+const verifyCode = async (uid, code) => {
+  try {
+    // Check if code exists and hasn't expired
+    const result = await db.oneOrNone(
+      "DELETE FROM verification_codes WHERE user_id = $1 AND code = $2 AND expires_at > NOW() RETURNING *",
+      [uid, code]
+    );
+
+    return !!result; // Return true if code was valid and not expired
+  } catch (error) {
+    console.error("❌ Database error verifying code:", error);
+    throw new Error("Error verifying code");
+  }
+};
+
 module.exports = {
   createUser,
   getUserById,
   enableTwoFactorAuth,
   disableTwoFactorAuth,
+  storeVerificationCode,
+  verifyCode,
 };
